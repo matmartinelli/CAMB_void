@@ -75,7 +75,7 @@
     !VOID------------------------------------
 !    call Ini%Read('number_of_bins',CosmoSettings%void_n)
 
-    call this%SetTheoryParameterNumbers(21+2*CosmoSettings%void_n+1,last_power_index) !NH increased no. of params MMmod: +1 for corrlen +1 for fiducial and prior likelihood
+    call this%SetTheoryParameterNumbers(21+2*CosmoSettings%void_n+2,last_power_index) !NH increased no. of params MMmod: +1 for corrlen +1 for fiducial and prior likelihood
     !----------------------------------------
     end subroutine TP_Init
 
@@ -152,7 +152,7 @@
             !MMmod: computing theta as derived, will be passed to derived(1) in place of H0
             CMB%thetaCMB = CosmoCalc%CMBToTheta(CMB)*100
             LastCMB(cache) = CMB
-            cache = mod(cache,ncache)+1            
+            cache = mod(cache,ncache)+1
         end select
         class default
         call MpiStop('CosmologyParameterizations: Calculator is not TCosmologyCalculator')
@@ -330,6 +330,8 @@
         end do
 
         CMB%void_fiducial = Params(21+2*CosmoSettings%void_n+1)
+
+        CMB%void_mean_fiducial = Params(21+2*CosmoSettings%void_n+2)
 
         call SetFast(Params,CMB)
     end if
