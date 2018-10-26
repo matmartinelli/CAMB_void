@@ -73,7 +73,7 @@ if ((z.ge.initial_z).and.(z.le.final_z)) then
    call extrasplint(z_ode,solvoid,ddsolvoid,nsteps,z,rho_v)
 else
    rho_m = solmat(nsteps) * ( (1+z)/(1+z_ode(nsteps)) )**3.
-   rho_v = solvoid(nsteps)!+ (-solvoid(nsteps))/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins)/((CP%zbins)/2)  ) )
+   rho_v = solvoid(nsteps)+ (-solvoid(nsteps))/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins)/((zvanish-CP%zbins)/2)  ) )
 end if
 
 
@@ -105,7 +105,7 @@ subroutine deinterface(CP)
 
       zvanish   = CP%zbins+CP%deltaz
 
-      final_z   = zvanish
+      final_z   = CP%zbins
 
       !allocating arrays
       if (allocated(z_ode) .eqv. .false.) allocate(z_ode(nsteps+1), solmat(nsteps+1), solvoid(nsteps+1))
@@ -159,6 +159,7 @@ subroutine deinterface(CP)
             call getcoupling(CP,-1+1/debug_a,real(debug_v),debug_q)
             write(666,*) -1+1/debug_a, -debug_q/debug_v
             write(17,*) -1+1/debug_a, (CP%omegac*debug_a**(-3))/(CP%omegav+CP%omegac*debug_a**(-3)),(CP%omegav)/(CP%omegav+CP%omegac*debug_a**(-3))
+            write(777,*) -1+1/debug_a, debug_c, debug_v
          end do
          close(42)
          close(666)
