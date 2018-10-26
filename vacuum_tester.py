@@ -18,8 +18,8 @@ print('CAMB version: %s '%camb.__version__)
 #NEGATIVE Q
 pars = camb.CAMBparams()
 #This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
-pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06, num_bins = 3, ending_z = 2.0)
-pars.set_cosmology(zbins0 = 1.0, zbins1 = 1.5, zbins2 = 2.0, qbins0 = 0.5, qbins1 = 0.5, qbins2 = 0.0)
+pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06)
+pars.set_cosmology(zvoid = 1.0, qvoid = -0.5, deltaz = 0.5)
 pars.InitPower.set_params(ns=0.965, r=0, As=2e-9)
 pars.set_for_lmax(2500, lens_potential_accuracy=0);
 #calculate results for these parameters
@@ -34,8 +34,8 @@ DL_negative = results_dhost.luminosity_distance(z)
 #POSITIVE Q
 pars = camb.CAMBparams()
 #This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
-pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06, num_bins = 3, ending_z = 2.0)
-pars.set_cosmology(zbins0 = 1.0, zbins1 = 1.5, zbins2 = 2.0, qbins0 = -3., qbins1 = 0.5, qbins2 = 0.0)
+pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06)
+pars.set_cosmology(zvoid = 1.0, qvoid = 0.5, deltaz = 0.5)
 pars.InitPower.set_params(ns=0.965, r=0, As=2e-9)
 pars.set_for_lmax(2500, lens_potential_accuracy=0);
 #calculate results for these parameters
@@ -52,7 +52,8 @@ DL_positive = results_dhost.luminosity_distance(z)
 #Set up a new set of parameters for CAMB
 pars = camb.CAMBparams()
 #This function sets up CosmoMC-like settings, with one massive neutrino and helium set using BBN consistency
-pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06, void_model = 0, num_bins = 2, ending_z = 2.0)
+pars.set_cosmology(H0=70.0, ombh2=0.0226, omch2=0.112, mnu=0.06, omk=0, tau=0.06)
+pars.set_cosmology(zvoid = 1.0, qvoid = 0., deltaz = 0.5)
 pars.InitPower.set_params(ns=0.965, r=0, As=2e-9)
 pars.set_for_lmax(2500, lens_potential_accuracy=0);
 #calculate results for these parameters

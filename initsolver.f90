@@ -6,7 +6,7 @@
 
 module initsolver
 use precision
-! use constants
+use constants
 use ModelParams
 
 implicit none
@@ -17,11 +17,10 @@ real                               :: final_z                     !final scale f
 integer                            :: nsteps    = 10000           !number of integration steps
 real(dl), dimension(:),allocatable :: z_ode, solmat, solvoid      !8piG/3 * rho_m and rho_v
 real(dl), dimension(:),allocatable :: ddsolmat, ddsolvoid         !same but derivatives obtained from spline
-real(dl), dimension(:),allocatable :: GP_z, GP_q, dd_GP_q         !output arrays of GP reconstruction
 real                               :: coupling                    !value of the coupling parameter as taken from CAMB
 integer                            :: model                       !choice of the interaction model we want to use
-integer, parameter                 :: theta_void=1, smooth_void=2 !possible options for q(z) binned reconstruction
-integer, parameter                 :: GP_void=3, baseline_void=4  !possible options for q(z) gaussian process reconstruction
+
+real(dl)                           :: zvanish                     !at this redshift rhov=0
 
 logical                            :: debugging = .false.         !if T prints some files to check solver
 
@@ -36,50 +35,15 @@ real(dl), intent(out) :: Q
 real                  :: multitheta !double theta function for binning
 integer               :: i
 
-      if (CP%void_model.eq.theta_void) then
-         !Working with binned qV. No smoothing.
-
-         if (z.gt.CP%zbins(CP%numvoidbins)) then
-            Q = -CP%qbins(CP%numvoidbins)*rhov
-         else
-            Q = CP%qbins(1)
-            do i=1,CP%numvoidbins-1
-               multitheta = (sign(1d0,(z-CP%zbins(i)))+1)/2 - (sign(1d0,(z-CP%zbins(i+1)))+1)/2
-               Q = Q + (CP%qbins(i+1)-CP%qbins(1))*multitheta
-            end do
-            Q = -Q*rhov
-         end if
-
-      else if (CP%void_model.eq.smooth_void) then
-         !Working with binned qV smoothed with tanh.
-         !Binned function used is based on Eq. 6 of 1703.01271
+      !Working with binned qV smoothed with tanh.
+      !Binned function used is based on Eq. 6 of 1703.01271
 
 
-         if (z.gt.CP%zbins(CP%numvoidbins)) then
-            Q = -CP%qbins(CP%numvoidbins)*rhov
-         else
-            Q = CP%qbins(1)
-            do i=1,CP%numvoidbins-1
-               if (i.eq.1) then
-                  Q = Q + (CP%qbins(i+1)-CP%qbins(i))/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins(i))/((CP%zbins(i))/2)  ) )
-               else
-                  Q = Q + (CP%qbins(i+1)-CP%qbins(i))/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins(i))/((CP%zbins(i)-CP%zbins(i-1))/2)  ) )
-               end if
-            end do
-            Q = -Q*rhov
-         end if
+      Q = CP%qbins
+!      Q = Q + (-CP%qbins)/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins)/((CP%zbins)/2)  ) )
+      Q = Q + (-CP%qbins)/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins)/((zvanish-CP%zbins)/2)  ) )
+      Q = -Q*rhov
 
-      else if ((CP%void_model.eq.GP_void).or.(CP%void_model.eq.baseline_void)) then
-         !interpolates what is obtained by GP in deinterface
-         if (z.lt.CP%endred) then
-            call extrasplint(GP_z,GP_q,dd_GP_q,nsteps,z,Q)
-         else
-            Q=0._dl
-         end if
-         Q = -Q*rhov
-      else
-         write(*,*) 'wait for it'
-      end if
 
       !SP: debugging
       if (z>final_z) Q = 0._dl
@@ -109,10 +73,11 @@ if ((z.ge.initial_z).and.(z.le.final_z)) then
    call extrasplint(z_ode,solvoid,ddsolvoid,nsteps,z,rho_v)
 else
    rho_m = solmat(nsteps) * ( (1+z)/(1+z_ode(nsteps)) )**3.
-   rho_v = solvoid(nsteps)
+   rho_v = solvoid(nsteps)!+ (-solvoid(nsteps))/2 * (1+tanh( CP%smoothfactor*(z-CP%zbins)/((CP%zbins)/2)  ) )
 end if
 
-if ((rho_m.le.0._dl).or.(rho_v.le.0._dl)) then
+
+if ((rho_m.lt.0._dl).or.(rho_v.lt.0._dl)) then
    global_error_flag         = 1
    global_error_message      = 'INITSOLVER: negative densities'
    if (present(error)) error = global_error_flag
@@ -126,7 +91,6 @@ end subroutine getrhos
 subroutine deinterface(CP)
       Type(CAMBparams) CP
       integer, parameter      :: n = 1
-      real, parameter :: cc = 2.99792458e8_dl
       real, dimension(0:n)    :: x                              !dependent variables: rho_m, rho_v
       real                    :: h                              !step size
       real(dl)                :: rhoc_init, rhov_init
@@ -135,195 +99,39 @@ subroutine deinterface(CP)
       real(dl)                :: debug_a, debug_c, debug_v, first_a_debug
       real(dl)                :: debug_q
 
-      !Interface with GP python script
-      character(LEN= 1000)                :: redbin
-      character(LEN= 1000)                :: qbin
-      character(LEN= 1000)                :: steps_de
-      character(LEN= 1000)                :: z_ini
-      character(LEN= 1000)                :: z_end
-      character(LEN= 1000)                :: lencorr
-      character(LEN= 20)                  :: feature_file="tmp_GPqz_000000.dat"
-      character(LEN=10000)                :: command_plus_arguments
-      real(dl), dimension(CP%numvoidbins) :: gpreds
-      integer :: status
-      integer :: getpid
-      integer :: system
-
 
       !initializing global ODE solver parameters from CAMB
       initial_z = 0._dl
-      final_z   = CP%endred
-      nsteps    = CP%numstepsODE
+
+      zvanish   = CP%zbins+CP%deltaz
+
+      final_z   = zvanish
 
       !allocating arrays
       if (allocated(z_ode) .eqv. .false.) allocate(z_ode(nsteps+1), solmat(nsteps+1), solvoid(nsteps+1))
       if (allocated(ddsolmat) .eqv. .false.) allocate(ddsolmat(nsteps+1), ddsolvoid(nsteps+1))
-      if (allocated(GP_z) .eqv. .false.) allocate(GP_z(nsteps+1))
-      if (allocated(GP_q) .eqv. .false.) allocate(GP_q(nsteps+1))
-      if (allocated(dd_GP_q) .eqv. .false.) allocate(dd_GP_q(nsteps+1))
 
       if (debugging) then
-         if ((CP%void_model.eq.theta_void).or.(CP%void_model.eq.smooth_void)) then
-            write(*,*) 'num_bins=',CP%numvoidbins
-            do k=1,CP%numvoidbins
-               write(*,*) 'redshift',k,'=',CP%zbins(k)
-               write(*,*) 'coupling',k,'=',CP%qbins(k)
-            end do
-         end if
+         write(*,*) 'moving redshift=',CP%zbins
+         write(*,*) 'zeroDE redshift=',zvanish
+         write(*,*) 'coupling',k,'=',CP%qbins
       end if
 
       !setting initial conditions for rho_c and rho_v at z=0
-      rhoc_init = 3*(1000*CP%H0/cc)**2.*CP%omegac               !8 pi G * rho_c^0
-      rhov_init = 3*(1000*CP%H0/cc)**2.*CP%omegav               !8 pi G * rho_V^0
+      rhoc_init = 3*(1000*CP%H0/c)**2.*CP%omegac               !8 pi G * rho_c^0
+      rhov_init = 3*(1000*CP%H0/c)**2.*CP%omegav               !8 pi G * rho_V^0
       x = (/rhoc_init, rhov_init/)                             !initial conditions
       h = (log(1/(1+final_z)) - log(1/(1+initial_z)))/nsteps
-
-
-      !Gaussian process interface
-      if ((CP%void_model.eq.GP_void).or.(CP%void_model.eq.baseline_void)) then
-
-         !Setting GP redshift to median redshift of each bin
-         gpreds(1) = CP%zbins(1)/2
-         do i=2,CP%numvoidbins
-            gpreds(i) = (CP%zbins(i)+CP%zbins(i-1))/2.
-         end do
-
-         !Creating command line
-
-         !Generate tmp file name based on PID
-         write (feature_file(11:16), "(Z6.6)") getpid()
-         !1. Prepare command and launch it!
-         write(z_ini, "(E15.7)"      ) initial_z
-         write(z_end, "(E15.7)"      ) final_z
-         write(steps_de, "(I10)"     ) nsteps
-         write(redbin, "(10E15.7)"   ) (gpreds(k),k=1,CP%numvoidbins)
-         write(qbin, "(10f15.7)"     ) (CP%qbins(k),k=1,CP%numvoidbins) !python parser struggles with scientific notation negatives: using floats here
-         write(lencorr, "(10E15.7)"  ) CP%corrlen
-
-
-         if (CP%void_model.eq.GP_void) then
-            if (debugging) write(*,*) 'WORKING WITH GP'
-            !here needs the call to script with no baseline
-            write(0,*) 'GP with no baseline not implemented yet'
-            stop
-
-
-         else if (CP%void_model.eq.baseline_void) then
-
-            if (debugging) write(*,*) 'WORKING WITH GP (with baseline)'
-
-            command_plus_arguments = "python camb/GP.py --inired "//trim(adjustl(z_ini))//" --endred "//trim(adjustl(z_end))//" --ODEsteps "//trim(adjustl(steps_de))// &
-            & " --redshifts "//trim(adjustl(redbin))// " --couplings "//trim(adjustl(qbin))// " --l "//trim(adjustl(lencorr))//" --outfile " // feature_file
-
-            !calling script!!!
-            if (debugging) then
-               write(*,*) 'Calling Gaussian process script with command line:'
-               write(*,*) trim(adjustl(command_plus_arguments))
-            end if
-            status = system(trim(adjustl(command_plus_arguments)))
-            if (status/=0) then
-               print *, "Failure in GP reconstruction of q(z) -- see above."
-               call abort
-            end if
-
-         end if
-
-         !Reading temporary file generated by GP script--------------
-         open(unit=17, file=feature_file, action='read')
-         do i=1,nsteps
-            read(17, "(E15.8, 1X, E15.8)", iostat=status) GP_z(i), GP_q(i)
-            if (status>0) then
-               print *, "Error reading the tmp q(z) file."
-               call abort
-            end if
-         end do
-         close(17, status='delete')
-         !-----------------------------------------------------------
-
-         !Setting interpolation for GP arrays------------------------
-         call spline(GP_z,GP_q,nsteps,1d30,1d30,dd_GP_q)
-         !-----------------------------------------------------------
-      end if
-
-
-
-      !Gaussian process interface
-      if ((CP%void_model.eq.GP_void).or.(CP%void_model.eq.baseline_void)) then
-
-         !Setting GP redshift to median redshift of each bin
-         gpreds(1) = CP%zbins(1)/2
-         do i=2,CP%numvoidbins
-            gpreds(i) = (CP%zbins(i)+CP%zbins(i-1))/2.
-         end do
-
-         !Creating command line
-
-         !Generate tmp file name based on PID
-         write (feature_file(11:16), "(Z6.6)") getpid()
-         !1. Prepare command and launch it!
-         write(z_ini, "(E15.7)"      ) initial_z
-         write(z_end, "(E15.7)"      ) final_z
-         write(steps_de, "(I10)"     ) nsteps
-         write(redbin, "(10E15.7)"   ) (gpreds(k),k=1,CP%numvoidbins)
-         write(qbin, "(10f15.7)"     ) (CP%qbins(k),k=1,CP%numvoidbins) !python parser struggles with scientific notation negatives: using floats here
-         write(lencorr, "(10E15.7)"  ) CP%corrlen
-
-
-         if (CP%void_model.eq.GP_void) then
-            if (debugging) write(*,*) 'WORKING WITH GP'
-            !here needs the call to script with no baseline
-            write(0,*) 'GP with no baseline not implemented yet'
-            stop
-
-
-         else if (CP%void_model.eq.baseline_void) then
-
-            if (debugging) write(*,*) 'WORKING WITH GP (with baseline)'
-
-            command_plus_arguments = "python camb/GP.py --inired "//trim(adjustl(z_ini))//" --endred "//trim(adjustl(z_end))//" --ODEsteps "//trim(adjustl(steps_de))// &
-            & " --redshifts "//trim(adjustl(redbin))// " --couplings "//trim(adjustl(qbin))// " --l "//trim(adjustl(lencorr))//" --outfile " // feature_file
-
-            !calling script!!!
-            if (debugging) then
-               write(*,*) 'Calling Gaussian process script with command line:'
-               write(*,*) trim(adjustl(command_plus_arguments))
-            end if
-            status = system(trim(adjustl(command_plus_arguments)))
-            if (status/=0) then
-               print *, "Failure in GP reconstruction of q(z) -- see above."
-               call abort
-            end if
-
-         end if
-
-         !Reading temporary file generated by GP script--------------
-         open(unit=17, file=feature_file, action='read')
-         do i=1,nsteps
-            read(17, "(E15.8, 1X, E15.8)", iostat=status) GP_z(i), GP_q(i)
-            if (status>0) then
-               print *, "Error reading the tmp q(z) file."
-               call abort
-            end if
-         end do
-         close(17, status='delete')
-         !-----------------------------------------------------------
-
-         !Setting interpolation for GP arrays------------------------
-         call spline(GP_z,GP_q,nsteps,1d30,1d30,dd_GP_q)
-         !-----------------------------------------------------------
-      end if
-
 
       if (debugging) then
          write(*,*) '---------------------------------------------'
          write(*,*) 'STARTING DIFFERENTIAL EQUATION FOR COUPLED DE'
          write(*,*) 'initial settings:'
-         write(*,*) 'model           =',CP%void_model
          write(*,*) 'initial redshift=',initial_z
          write(*,*) 'final redshift  =',final_z
          write(*,*) 'rho_c initial   =',rhoc_init
          write(*,*) 'rho_v initial   =',rhov_init
-         write(*,*) 'points for ODE   =',CP%numstepsODE
+         write(*,*) 'points for ODE   =',nsteps
          write(*,*) '---------------------------------------------'
       end if
 
@@ -341,28 +149,21 @@ subroutine deinterface(CP)
 
       if (debugging) then
          first_a_debug = 1.e-4
-         if (CP%void_model.eq.theta_void) then
-            open(42, file='solutions_thetabin.dat')
-            open(666,file='binned_coupling_thetabin.dat')
-         else if (CP%void_model.eq.smooth_void) then
-            open(42, file='solutions_smoothbin.dat')
-            open(666,file='binned_coupling_smoothbin.dat')
-         else if (CP%void_model.eq.GP_void) then
-            open(42, file='solutions_GP.dat')
-            open(666,file='binned_coupling_GP.dat')
-         else if (CP%void_model.eq.baseline_void) then
-            open(42, file='solutions_GPbaseline.dat')
-            open(666,file='binned_coupling_GPbaseline.dat')
-         end if
+         open(42, file='solutions_smoothbin.dat')
+         open(666,file='binned_coupling_smoothbin.dat')
+         open(17, file='densities_lcdm.dat')
          do k=1,nsteps
             debug_a = first_a_debug+k*(1.-first_a_debug)/nsteps
             call getrhos(debug_a,debug_c, debug_v)
-            write(42,*) debug_a, debug_c/(debug_c+debug_v), debug_v/(debug_c+debug_v)
+            write(42,*) -1+1/debug_a, debug_c/(debug_c+debug_v), debug_v/(debug_c+debug_v)
             call getcoupling(CP,-1+1/debug_a,real(debug_v),debug_q)
             write(666,*) -1+1/debug_a, -debug_q/debug_v
+            write(17,*) -1+1/debug_a, (CP%omegac*debug_a**(-3))/(CP%omegav+CP%omegac*debug_a**(-3)),(CP%omegav)/(CP%omegav+CP%omegac*debug_a**(-3))
          end do
          close(42)
          close(666)
+         close(17)
+         stop
       end if
 
       if (debugging) then

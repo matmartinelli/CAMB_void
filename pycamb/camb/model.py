@@ -224,13 +224,9 @@ class CAMBparams(CAMB_Structure):
         ("omegan", c_double),
         #MMmod---------
         ("smoothfactor", c_double),
-        ("zbins", c_double * 20 ),
-        ("qbins", c_double * 20),
-        ("corrlen", c_double),
-        ("endred", c_double),
-        ("void_model", c_int),
-        ("numvoidbins", c_int),
-        ("numstepsODE", c_int),
+        ("zbins", c_double),
+        ("qbins", c_double),
+        ("deltaz", c_double),
         #-------MMmod
         ("H0", c_double),
         ("TCMB", c_double),
@@ -312,13 +308,7 @@ class CAMBparams(CAMB_Structure):
         return self
 
     def set_cosmology(self, H0=67.0, cosmomc_theta=None, ombh2=0.022, omch2=0.12, omk=0.0,
-                      void_model=2, num_bins = 1, smooth_factor = 10, zbins0=0., qbins0=0., zbins1=1., qbins1=0.,
-                      zbins2=2., qbins2=0., zbins3=3., qbins3=0., zbins4=4., qbins4=0., zbins5=1., qbins5=0.,
-                      zbins6=6., qbins6=0., zbins7=7., qbins7=0., zbins8=4., qbins8=0., zbins9=9., qbins9=0.,
-                      zbins10=10., qbins10=0., zbins11=11., qbins11=0., zbins12=12., qbins12=0., zbins13=13., qbins13=0.,
-                      zbins14=14., qbins14=0., zbins15=15., qbins15=0., zbins16=16., qbins16=0., zbins17=17., qbins17=0.,
-                      correlation_length = 0.5, ending_z = 10, ODEsteps = 10000,
-                      #void_model=2, num_bins = 1, smooth_factor = 10, correlation_length = 0.5, ending_z = 10, ODEsteps = 10000,
+                      smooth_factor = 10, zvoid=0., qvoid=0., deltaz = 0.5,
                       neutrino_hierarchy='degenerate', num_massive_neutrinos=1,
                       mnu=0.06, nnu=3.046, YHe=None, meffsterile=0.0, standard_neutrino_neff=3.046,
                       TCMB=constants.COBE_CMBTemp, tau=None, deltazrei=None, bbn_predictor=None,
@@ -390,23 +380,15 @@ class CAMBparams(CAMB_Structure):
         fac = (self.H0 / 100.0) ** 2
         self.omegab = ombh2 / fac
         self.omegac = omch2 / fac
-        self.void_model = void_model
-        self.numvoidbins = int(num_bins)
+
+
+        #MMmod: void parameters
         self.smoothfactor = smooth_factor
+        self.zbins        = zvoid
+        self.qbins        = qvoid
+        self.deltaz       = deltaz
 
 
-        for i in range(int(num_bins)):
-            entryz = eval('zbins{}'.format(i))
-            entryq = eval('qbins{}'.format(i))
-            self.zbins[i] = entryz
-            self.qbins[i] = entryq
-        #for i in range(num_bins):
-        #    self.zbins[i] = zbins[i]
-        #    self.qbins[i] = qbins[i]
-
-        self.corrlen = correlation_length
-        self.endred = ending_z
-        self.numstepsODE = ODEsteps
         neutrino_mass_fac = 94.07
         # conversion factor for thermal with Neff=3 TCMB=2.7255
 

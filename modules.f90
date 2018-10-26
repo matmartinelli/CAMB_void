@@ -95,9 +95,6 @@
     integer, parameter :: NonLinear_none=0, NonLinear_Pk =1, NonLinear_Lens=2
     integer, parameter :: NonLinear_both=3  !JD 08/13 added so both can be done
 
-    !MMmod: maximum nuber of bins for void coupling
-    !This is added to avoid messy allocations
-    integer, parameter :: maxbins = 20
 
     ! Main parameters type
     type CAMBparams
@@ -115,8 +112,7 @@
         ! _tensor settings only used in initialization,
         !Max_l and Max_eta_k are set to the tensor variables if only tensors requested
 
-        real(dl)  :: omegab, omegac, omegav, omegan, smoothfactor, zbins(maxbins), qbins(maxbins), corrlen, endred
-        integer   :: void_model, numvoidbins, numstepsODE
+        real(dl)  :: omegab, omegac, omegav, omegan, smoothfactor, zbins, qbins, deltaz
         !Omega baryon, CDM, Lambda and massive neutrino
         real(dl)  :: H0,TCMB,yhe,Num_Nu_massless
         integer   :: Num_Nu_massive !sum of Nu_mass_numbers below
