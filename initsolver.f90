@@ -6,10 +6,10 @@
 
 module initsolver
 use precision
-use constants
 use ModelParams
 
 implicit none
+real(dl), parameter :: cc = 2.99792458e8_dl
 
 !global variable for solver
 real                               :: initial_z                   !starting scale factor for ODE
@@ -118,8 +118,8 @@ subroutine deinterface(CP)
       end if
 
       !setting initial conditions for rho_c and rho_v at z=0
-      rhoc_init = 3*(1000*CP%H0/c)**2.*CP%omegac               !8 pi G * rho_c^0
-      rhov_init = 3*(1000*CP%H0/c)**2.*CP%omegav               !8 pi G * rho_V^0
+      rhoc_init = 3*(1000*CP%H0/cc)**2.*CP%omegac               !8 pi G * rho_c^0
+      rhov_init = 3*(1000*CP%H0/cc)**2.*CP%omegav               !8 pi G * rho_V^0
       x = (/rhoc_init, rhov_init/)                             !initial conditions
       h = (log(1/(1+final_z)) - log(1/(1+initial_z)))/nsteps
 
