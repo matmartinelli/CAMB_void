@@ -50,6 +50,7 @@
     procedure :: BAO_D_v => CAMBCalc_BAO_D_v
     procedure :: AngularDiameterDistance => CAMBCalc_AngularDiameterDistance
     procedure :: ComovingRadialDistance => CAMBCalc_ComovingRadialDistance
+    ! procedure :: ComovingRadialDistanceArr => CAMBCalc_ComovingRadialDistanceArr !NHmod
     procedure :: AngularDiameterDistance2 => CAMBCalc_AngularDiameterDistance2
     procedure :: LuminosityDistance => CAMBCalc_LuminosityDistance
     procedure :: Hofz => CAMBCalc_Hofz
@@ -93,24 +94,23 @@
     P%omegac = CMB%omc
     P%omegav = CMB%omv
 
-    P%numvoidbins = CosmoSettings%void_n
-    do i=1, CosmoSettings%void_n
-       P%zbins(i) = CMB%void_redshift(i)
-       P%qbins(i) = CMB%void_qV(i)
-    end do
-
-  P%void_model = CMB%void_model
-  P%endred = CMB%endred
-  P%numstepsODE = CMB%ODEsteps
-  if (P%void_model.eq.2) P%smoothfactor= CMB%smoothfactor
-  if (P%void_model.gt.2) P%corrlen = CMB%corrlen
+    P%numvoidbins = CosmoSettings%void_n !NHmod: compiler having a wobble here
+    do i=1, CosmoSettings%void_n		
+       P%zbins(i) = CMB%void_redshift(i)		
+       P%qbins(i) = CMB%void_qV(i)		
+    end do		
+    P%void_model = CMB%void_model		
+    P%endred = CMB%endred		
+    P%numstepsODE = CMB%ODEsteps		
+    if (P%void_model.eq.2) P%smoothfactor= CMB%smoothfactor		
+    if (P%void_model.gt.2) P%corrlen = CMB%corrlen    
 
     P%H0 = CMB%H0
     P%Reion%redshift= CMB%zre
     P%Reion%delta_redshift = CMB%zre_delta
     w_lam = CMB%w
-    !wa_ppf = CMB%wa  !SPmod
-    P%baryfeed =CMB%baryfeed !SJ
+    ! wa_ppf = CMB%wa !SPmod
+    P%baryfeed =CMB%baryfeed !SJ		
     P%barybloat = CMB%barybloat !SJ
     ALens = CMB%ALens
     ALens_Fiducial = CMB%ALensf
@@ -142,16 +142,17 @@
     integer noutputs, i
 
     noutputs = size(BackgroundOutputs%z_outputs)
-    Theory%numderived = nthermo_derived + noutputs*4
+    Theory%numderived = nthermo_derived + noutputs*2
     if (Theory%numderived > max_derived_parameters) &
         call MpiStop('numderived > max_derived_parameters: increase in CosmologyTypes.f90')
     Theory%derived_parameters(1:nthermo_derived) = ThermoDerivedParams(1:nthermo_derived)
     do i=1, noutputs
-        Theory%derived_parameters(nthermo_derived+(i-1)*4+1) = BackgroundOutputs%rs_by_D_v(i)
-        Theory%derived_parameters(nthermo_derived+(i-1)*4+2) = BackgroundOutputs%H(i)*const_c/1e3_mcp
-        Theory%derived_parameters(nthermo_derived+(i-1)*4+3) = BackgroundOutputs%DA(i)
-        Theory%derived_parameters(nthermo_derived+(i-1)*4+4) = (1+BackgroundOutputs%z_outputs(i))* &
-            BackgroundOutputs%DA(i) * BackgroundOutputs%H(i) !F_AP parameter
+        !Theory%derived_parameters(nthermo_derived+(i-1)*3+1) = BackgroundOutputs%rs_by_D_v(i)
+        !now use Hubble paramter in normal units and DM, comoving angular diameter distance
+        Theory%derived_parameters(nthermo_derived+(i-1)*2+1) = BackgroundOutputs%H(i)*const_c/1e3_mcp
+        Theory%derived_parameters(nthermo_derived+(i-1)*2+2) = BackgroundOutputs%DA(i)*(1+BackgroundOutputs%z_outputs(i))
+        !Theory%derived_parameters(nthermo_derived+(i-1)*4+4) = (1+BackgroundOutputs%z_outputs(i))* &
+        !    BackgroundOutputs%DA(i) * BackgroundOutputs%H(i) !F_AP parameter
     end do
     end subroutine CAMBCalc_SetDerived
 
@@ -393,7 +394,11 @@
                         if (CosmoSettings%CMB_Lensing) then
                             CL(2:lmx) = cons*Cl_lensed(2:lmx,1, indicesT(i,j))
                         else
-                            if (indicesS(i,j)/=0) CL(2:lmx) = cons*Cl_Scalar(2:lmx,1, indicesS(i,j))
+                            if (indicesS(i,j)/=0) then
+                                CL(2:lmx) = cons*Cl_Scalar(2:lmx,1, indicesS(i,j))
+                            else
+                                CL=0
+                            end if
                         end if
                         if (CosmoSettings%lmax_computed_cl < lmaxCL) then
                             if (highL_norm ==0) & !normally normalize off TT
@@ -503,11 +508,12 @@
             return
         end if
         allocate(Theory%MPK)
-        call Theory%MPK%Init(k,z,PK)
+        call Theory%MPK%InitExtrap(k,z,PK, CosmoSettings%extrap_kmax)
     end if
 
 
     if (CosmoSettings%use_Weylpower) then
+        ! Weyl potential:
         call Transfer_GetUnsplinedPower(M, PK,transfer_Weyl,transfer_Weyl,hubble_units=.false.)
         PK = Log(PK)
         if (any(ieee_is_nan(PK))) then
@@ -515,7 +521,12 @@
             return
         end if
         allocate(Theory%MPK_WEYL)
-        call Theory%MPK_WEYL%Init(k,z,PK)
+        call Theory%MPK_WEYL%InitExtrap(k,z,PK,CosmoSettings%extrap_kmax)
+        ! Weyl density cross correlation:
+        call Transfer_GetUnsplinedPower(M, PK,transfer_Weyl,transfer_power_var,hubble_units=.false.)
+        allocate(Theory%MPK_WEYL_CROSS)
+        Theory%MPK_WEYL_CROSS%islog = .False.
+        call Theory%MPK_WEYL_CROSS%InitExtrap(k,z,PK,CosmoSettings%extrap_kmax)
     end if
 
     if (CosmoSettings%use_SigmaR) then
@@ -581,13 +592,21 @@
         error = 1
         return
     end if
-    call Theory%NL_MPK%Init(Theory%MPK%x,Theory%MPK%y,PK)
+    call Theory%NL_MPK%InitExtrap(Theory%MPK%x,Theory%MPK%y,PK,CosmoSettings%extrap_kmax)
 
     if (allocated(Theory%MPK_WEYL)) then
         !Assume Weyl scales the same way under non-linear correction
         allocate(Theory%NL_MPK_WEYL)
         PK = Theory%MPK_WEYL%z + 2*log(Ratios)
-        call Theory%NL_MPK_WEYL%Init(Theory%MPK%x,Theory%MPK%y,PK)
+        call Theory%NL_MPK_WEYL%InitExtrap(Theory%MPK%x,Theory%MPK%y,PK,CosmoSettings%extrap_kmax)
+    end if
+
+    if (allocated(Theory%MPK_WEYL_CROSS)) then
+        !Assume Weyl scales the same way under non-linear correction
+        allocate(Theory%NL_MPK_WEYL_CROSS)
+        PK = Theory%MPK_WEYL_CROSS%z*Ratios**2
+        Theory%NL_MPK_WEYL_CROSS%islog = .False.
+        call Theory%NL_MPK_WEYL_CROSS%InitExtrap(Theory%MPK%x,Theory%MPK%y,PK,CosmoSettings%extrap_kmax)
     end if
 
     end subroutine CAMBCalc_GetNLandRatios
@@ -681,6 +700,21 @@
 
     end function CAMBCalc_ComovingRadialDistance
 
+    !NHmod: removing this subroutine, which is a new 2018 version feature
+    !compiler having difficulties
+    ! references to this routine will be removed in wl.f90 and calc_cosmo.f90 also
+    !subroutine CAMBCalc_ComovingRadialDistanceArr(this, z, arr, n)
+    !use CAMB, only : ComovingRadialDistanceArr  !!comoving radial distance also in Mpc no h units
+    !class(CAMB_Calculator) :: this
+    !integer, intent(in) :: n
+    !real(mcp), intent(IN) :: z(n)
+    !real(mcp), intent(out) :: arr(n)
+    !Note redshifts must be monotonically increasing    
+
+    !call ComovingRadialDistanceArr(arr, z, n, 1d-4)
+
+    !end subroutine CAMBCalc_ComovingRadialDistanceArr
+
     real(mcp) function CAMBCalc_AngularDiameterDistance2(this, z1, z2)
     use CAMB, only : AngularDiameterDistance2  !!angular diam distance also in Mpc no h units
     class(CAMB_Calculator) :: this
@@ -720,7 +754,7 @@
     !for nonlinear lensing of CMB + LSS compatibility
     Threadnum =num_threads
     w_lam = -1
-    ! wa_ppf = 0._dl
+    ! wa_ppf = 0._dl !NHmod
     call CAMB_SetDefParams(P)
 
     HighAccuracyDefault = .true.

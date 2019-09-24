@@ -8,12 +8,13 @@
     integer, parameter :: derived_age=1, derived_zstar=2, derived_rstar=3, derived_thetastar=4, derived_DAstar = 5, &
         derived_zdrag=6, derived_rdrag=7,derived_kD=8,derived_thetaD=9, derived_zEQ =10, derived_keq =11, &
         derived_thetaEQ=12, derived_theta_rs_EQ = 13 !index in derived parameters array
-   integer, parameter :: n_max = 100
+    
+    integer, parameter :: n_max=100 !NHmod
 
     integer, parameter :: As_index=1, ns_index =2, nrun_index=3, nrunrun_index=4, amp_ratio_index = 5, &
         & nt_index= 6, ntrun_index = 7, Aphiphi_index = 8, last_power_index = Aphiphi_index
 
-    integer, parameter :: max_inipower_params = 14
+    integer, parameter :: max_inipower_params = 10
 
     real(mcp), parameter :: cl_norm = 1e-10_mcp !units for As
     integer, parameter :: max_derived_parameters = 30
@@ -32,7 +33,9 @@
         logical :: Use_LSS = .false.
         logical :: Use_CMB = .false.
         logical :: use_nonlinear = .false.    !JD for WiggleZ MPK
-        integer :: void_n
+
+        integer :: void_n !NHmod
+
         !l_max. Tensors are not computed unless compute_tensors = T in input file
         !Make these multiples of 50, should be 50 more than you need accurately
         integer :: lmax = 0
@@ -44,10 +47,7 @@
         integer :: lmin_store_all_cmb = 0 !>0 if you want output everything even if not used
 
         !redshifts for output of BAO background parameters
-       !  real(mcp) :: z_outputs(1) = [0.57_mcp]
-
-
-        real(mcp) :: z_outputs(1) = [4.1_mcp] !SJ
+        real(mcp) :: z_outputs(5) = [0.15_mcp, 0.38_mcp, 0.51_mcp, 0.61_mcp, 2.33_mcp]
 
         logical :: CMB_lensing = .true.
         logical :: use_lensing_potential = .false.
@@ -58,8 +58,7 @@
         logical :: use_matterpower = .false.
         logical :: use_Weylpower = .false. !power spectrum of Weyl potential for lensing
         logical :: use_sigmaR =.false. !sigma_R, e.g. for clusters
-       ! real(mcp) :: power_kmax = 0.8_mcp
-        real(mcp) :: power_kmax =100.0d0 !SJ
+        real(mcp) :: power_kmax = 0.8_mcp
         integer :: num_power_redshifts = 0
 
         !Only used in params_CMB
@@ -81,8 +80,8 @@
         integer, allocatable :: cl_lmax(:,:)
         integer, allocatable :: ArraySizes(:)
         !e.g. lmax_cl(1,1) is lmax for TT; zero if CL is not used; order is T, E, B, Phi
-        real(mcp) :: extrap_kmax = 700._mcp !Allow extrapolation to this kmax/h in P(k) !NHmod
         real(mcp), dimension(:), allocatable :: power_redshifts
+        real(mcp) :: extrap_kmax = 700._mcp !Allow extrapolation to this kmax/h in P(k)
     contains
     procedure, private :: Initialize_PKSettings
     procedure, private :: Initialize_CMBSettings
@@ -113,14 +112,16 @@
 
     Type, extends(TTheoryParams) :: CMBParams
         real(mcp) InitPower(max_inipower_params)
-        !These are fast paramters for the initial power spectrum
+        !These are fast parameters for the initial power spectrum
         !Now remaining (non-independent) parameters
         real(mcp) omb, omc, omv, omnu, omk, omdm
         real(mcp) ombh2, omch2, omnuh2, omdmh2
         !MMmod: VOID--------------------
-!         integer void_n ! number of bins
+        !integer void_n ! number of bins
         real(mcp) void_qV(n_max)
         real(mcp) void_redshift(n_max)
+        !real(mcp) void_qV
+        !real(mcp) void_redshift
         real(mcp) void_fiducial
         real(mcp) ODEsteps,endred, void_model, smoothfactor, corrlen
 	integer void_mean_fiducial
@@ -132,7 +133,7 @@
         real(mcp) YHe, nnu, iso_cdm_correlated, ALens, Alensf, fdm !fdm is dark matter annihilation, eg,. 0910.3663
         real(mcp) :: omnuh2_sterile = 0._mcp  !note omnhu2 is the sum of this + standard neutrinos
         real(mcp) :: sum_mnu_standard
-        real(mcp) :: thetaCMB !MMmod: added to use as derived parameter
+        real(mcp) :: thetaCMB !MMmod: added to use as derived parameter 
         real(mcp) reserved(5)
     end Type CMBParams
 
@@ -204,6 +205,7 @@
     this%neutrino_hierarchy = Ini%Read_Enumeration('neutrino_hierarchy',neutrino_types, neutrino_hierarchy_normal)
     if (this%neutrino_hierarchy == neutrino_hierarchy_degenerate) then
         call Ini%Read('num_massive_neutrinos',this%num_massive_neutrinos)
+        if (this%num_massive_neutrinos <1) call MpiStop('num_massive_neutrinos must be set set')
     else if (Ini%Read_Int('num_massive_neutrinos',0)>0) then
         write(*,*) 'NOTE: num_massive_neutrinos ignored, using specified hierarchy'
     end if
@@ -447,3 +449,4 @@
     end subroutine TCosmologyRequirementsLikelihood_InitForSettings
 
     end module CosmologyTypes
+
