@@ -1,5 +1,8 @@
 !NH this file contains the switch from theta to H0 as originally implemented by M Martinelli
 
+!NH the AstroParameterization that exists in the planck 2018 version of cosmomc has been removed
+
+
     !Default parameterization using theta = r_s/D_a instead of H_0, and tau instead of z_re
     !and log(A_s) instead of A_s
     !Less general, but should give better performance
@@ -162,6 +165,8 @@
 
     end subroutine TP_ParamArrayToTheoryParams
 
+
+    !NHmod: GetYPBBN removed as it's now in bbn.f90
     !function GetYPBBN(Yhe)
     !Convert yhe defined as mass fraction (CMB codes), to nucleon ratio definition
     !real(mcp), intent(in) :: Yhe
