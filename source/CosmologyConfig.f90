@@ -63,7 +63,7 @@
     logical OK
     Type(ThetaParameterization), pointer :: CMBParameterization
     Type(BackgroundParameterization), pointer :: BackgroundParam
-    Type(AstroParameterization), pointer :: AstParam
+    !Type(AstroParameterization), pointer :: AstParam !NHmod: removing AstroParameterization
 
     OK = .true.
     if (nametag =='background') then
@@ -75,9 +75,10 @@
         this%Parameterization => CMBParameterization
         call CMBParameterization%InitWithSetNames(Ini,Names,this)
     else if (nametag=='astro') then
-        allocate(AstParam)
-        this%Parameterization => AstParam
-        call AstParam%InitWithSetNames(Ini,Names,this)
+        !allocate(AstParam)
+        !this%Parameterization => AstParam
+        !call AstParam%InitWithSetNames(Ini,Names,this)
+        call MPIstop('AstroParameterization removed')
     else
         OK =  this%TGeneralConfig%SetParameterizationName(nametag,Ini,Names)
     end if
