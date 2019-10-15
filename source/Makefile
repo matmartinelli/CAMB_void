@@ -5,7 +5,8 @@ BUILD ?= MPI
 #set BUILD to MPI to force MPI, should be set in ../Makefile
 
 
-ifortErr = $(shell which ifort >/dev/null; echo $$?)
+ifortErr = 1
+#$(shell which ifort >/dev/null; echo $$?)
 
 #these settings for ifort 14 and higher. Earlier versions will not work.
 ifeq "$(ifortErr)" "0"
@@ -319,7 +320,7 @@ getdist: directories $(DISTFILES)
 camb:
 	cd ../camb && \
 	$(MAKE) --file=Makefile_main libcamb OUTPUT_DIR=$(OUTPUT_DIR) \
-	RECOMBINATION=$(RECOMBINATION) EQUATIONS=equations_ppf NONLINEAR=halofit_ppf
+	RECOMBINATION=$(RECOMBINATION) EQUATIONS=equations NONLINEAR=halofit_ppf
 
 $(highL)/libhigh.a:
 	cd $(highL); make libhigh.a;
